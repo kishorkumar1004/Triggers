@@ -1,0 +1,41 @@
+// Trigger on Note and attachment 
+trigger LeadPlacement on Placement_Occurance__c (before insert ,before update, after update) {
+    Switch  on Trigger.OperationType{
+      
+         When BEFORE_UPDATE{   
+           LeadPlacementHandler.statusUpdate(Trigger.New,Trigger.oldMap); 
+             
+        }
+    }
+ 
+}
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// handler class for note and attachment
+public class LeadPlacementHandler {    
+    public static void statusUpdate(List<Placement_Occurance__c> newList, Map<Id,Placement_Occurance__c> oldMap) {        
+    Set<Id> placmentIdSet = new Set<Id>();    
+    Map<Id, Integer> placementIdToCountMap = new Map<Id, Integer>();
+    for (Placement_Occurance__c plc : newList) {
+        placmentIdSet.add(plc.Id);
+    }
+    for (AggregateResult aggregateResult : [SELECT LinkedEntityId, COUNT(Id) countList
+                                             FROM ContentDocumentLink 
+                                             WHERE LinkedEntityId IN :placmentIdSet 
+                                             GROUP BY LinkedEntityId]) {
+        Id placementId = (Id)aggregateResult.get('LinkedEntityId');
+        Integer count = (Integer)aggregateResult.get('countList');
+        placementIdToCountMap.put(placementId, count);
+    }
+    for (Placement_Occurance__c newPlac : newList) {
+        Placement_Occurance__c oldPlac = oldMap.get(newPlac.Id);		
+        if (oldPlac != null && oldPlac.Lead_Status__c != newPlac.Lead_Status__c) {
+            Integer attachmentCount = placementIdToCountMap.get(newPlac.Id);
+            if (attachmentCount == null || attachmentCount == 0) {
+                newPlac.addError('No notes and attachments found.');
+            }
+        }
+    }
+}    
+}
